@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="pt-PT">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<meta name="theme-color" content="#2A6AD0">
+<title>Diagnóstico da instalação</title>
+<link rel="manifest" href="manifest.webmanifest">
+<script src="version.js"></script>
+<style>
+:root{--bg:#EDF2F9;--card:#fff;--ink:#14213B;--ink2:#4E5D77;--line:#D3DCEA;--brand:#2A6AD0;--ok:#1E804F;--warn:#B25C2A;--bad:#C93545}
+@media (prefers-color-scheme:dark){:root{--bg:#0D1524;--card:#152036;--ink:#E7EDF8;--ink2:#A2B0C7;--line:#263650;--brand:#6BA3F5;--ok:#5CCB92;--warn:#F0A468;--bad:#F0707D}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:16px 16px 40px;max-width:640px;margin-inline:auto}
+h1{font-size:22px;margin:8px 0 4px}
+p.lead{margin:0 0 16px;color:var(--ink2)}
+.row{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:0 0 10px;display:flex;gap:12px;align-items:flex-start}
+.ic{flex:0 0 26px;height:26px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:800;font-size:15px;background:var(--ink2)}
+.ok .ic{background:var(--ok)}.warn .ic{background:var(--warn)}.bad .ic{background:var(--bad)}
+.row b{display:block}.row span{color:var(--ink2);font-size:14.5px}
+button,a.btn{display:inline-block;border:0;border-radius:12px;background:var(--brand);color:#fff;font:700 16px system-ui,sans-serif;padding:12px 18px;margin:8px 8px 0 0;text-decoration:none}
+button[disabled]{opacity:.5}
+#sum{font-weight:700;margin:14px 0 6px}
+small{color:var(--ink2)}
+</style>
+</head>
+<body>
+<h1>Diagnóstico da instalação</h1>
+<p class="lead">Esta página verifica se o Chrome vai mostrar "Instalar aplicação". Espera uns segundos até acabar.</p>
+<div id="list"></div>
+<p id="sum"></p>
+<div id="actions"></div>
+<p><small id="ver"></small></p>
+
+<script>
+(function(){
+  var list=document.getElementById('list');
+  var deferred=null, results=[];
+  function add(state,title,text){
+    results.push(state);
+    var d=document.createElement('div');d.className='row '+state;
+    var i=document.createElement('div');i.className='ic';i.textContent=state==='ok'?'✓':(state==='warn'?'!':'✗');
+    var b=document.createElement('div');
+    var t=document.createElement('b');t.textContent=title;
+    var s=document.createElement('span');s.textContent=text||'';
+    b.append(t,s);d.append(i,b);list.append(d);
+  }
+  window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();deferred=e});
+  document.getElementById('ver').textContent='Versão da app: '+(window.APP_VERSION||'desconhecida')+'  |  Endereço: '+location.origin;
+
+  var ua=navigator.userAgent;
+  var standalone=(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;
+
+  async function run(){
+    // 1. HTTPS
+    var secure=location.protocol==='https:'||location.hostname==='localhost'||location.hostname==='127.0.0.1';
+    add(secure?'ok':'bad','Endereço seguro (HTTPS)',secure?'O site abre com https://, como o Chrome exige.':'O endereço não começa por https://. O Chrome não deixa instalar. Usa o endereço https:// que o Netlify te deu.');
+
+    // 2. Navegador
+    var inApp=/; wv\)|FBAN|FBAV|Instagram|WhatsApp|Line\/|Messenger|TikTok/i.test(ua);
+    var chrome=/Chrome\/\d+/.test(ua)&&!/Edg\/|OPR\/|SamsungBrowser|Firefox|DuckDuckGo/i.test(ua);
+    if(inApp) add('bad','Navegador','Estás a abrir dentro de outra aplicação (WhatsApp, Instagram...). Copia o endereço e abre-o no Google Chrome.');
+    else if(!chrome) add('warn','Navegador','Isto não parece ser o Google Chrome. A opção "Instalar aplicação" aparece no Chrome.');
+    else add('ok','Navegador','Google Chrome.');
+
+    // 3. Manifest
+    var man=null;
+    try{
+      var link=document.querySelector('link[rel=manifest]');
+      var r=await fetch(link.href,{cache:'no-store'});
+      if(!r.ok) throw new Error('HTTP '+r.status);
+      man=await r.json();
+      var miss=['name','short_name','start_url','display','icons'].filter(function(k){return !man[k]});
+      var disp=['standalone','fullscreen','minimal-ui'].indexOf(man.display)>=0;
+      if(miss.length) add('bad','Manifest','Faltam campos: '+miss.join(', ')+'.');
+      else if(!disp) add('bad','Manifest','O "display" tem de ser standalone.');
+      else add('ok','Manifest','Nome "'+man.name+'", abre em janela própria (standalone).');
+    }catch(e){ add('bad','Manifest','Não consegui ler o manifest.webmanifest ('+e.message+').'); }
+
+    // 4. Ícones
+    if(man&&man.icons){
+      var need=[192,512],found={},maskable=false;
+      for(var k=0;k<man.icons.length;k++){
+        var ic=man.icons[k],sz=(ic.sizes||'').split(' ')[0].split('x')[0]|0;
+        if(/maskable/.test(ic.purpose||'')) maskable=true;
+        if(/png/.test(ic.type||'')&&(!ic.purpose||/any/.test(ic.purpose))){
+          try{var ir=await fetch(new URL(ic.src,location.href),{cache:'no-store'});
+              if(ir.ok&&/image\//.test(ir.headers.get('content-type')||'')) found[sz]=true;}catch(e){}
+        }
+      }
+      var missing=need.filter(function(n){return !found[n]});
+      if(missing.length) add('bad','Ícones','Faltam ícones PNG de '+missing.join(' e ')+' píxeis.');
+      else add('ok','Ícones','Ícones de 192 e 512 encontrados'+(maskable?', incluindo o redondo (maskable).':'.'));
+    }
+
+    // 5. Service worker
+    var sw=null;
+    if(!('serviceWorker' in navigator)) add('bad','Service worker','Este navegador não suporta service workers.');
+    else{
+      try{
+        var reg=await navigator.serviceWorker.getRegistration('./')||await navigator.serviceWorker.register('sw.js');
+        await Promise.race([navigator.serviceWorker.ready,new Promise(function(_,j){setTimeout(function(){j(new Error('demorou'))},6000)})]);
+        sw=reg;
+        add('ok','Service worker','Ativo. É ele que faz a app abrir sem internet.');
+      }catch(e){ add('bad','Service worker','Não ficou ativo ('+e.message+').'); }
+    }
+
+    // 6. Offline
+    try{
+      var names=await caches.keys();
+      var hit=await caches.match('index.html');
+      if(hit) add('ok','Funciona sem internet','Os ficheiros da app já estão guardados neste aparelho.');
+      else add('warn','Funciona sem internet','Os ficheiros ainda não foram guardados. Abre a app uma vez com internet e volta a esta página.');
+    }catch(e){ add('warn','Funciona sem internet','Não consegui verificar a cache.'); }
+
+    // 7. Já instalada?
+    if(standalone) add('ok','Instalada','Estás a usar a app instalada (janela própria, sem barra de endereço).');
+
+    // 8. O Chrome oferece a instalação?
+    if(!standalone){
+      await new Promise(function(r){setTimeout(r,3500)});
+      if(deferred){
+        add('ok','O Chrome já oferece "Instalar aplicação"','Toca em "Instalar agora" aqui em baixo, ou usa o menu ⋮ do Chrome.');
+        var b=document.createElement('button');b.textContent='Instalar agora';
+        b.onclick=async function(){deferred.prompt();try{await deferred.userChoice}catch(e){}b.disabled=true};
+        document.getElementById('actions').append(b);
+      }else{
+        var allGood=results.every(function(s){return s==='ok'});
+        add(allGood?'warn':'bad','O Chrome ainda não ofereceu a instalação',
+          allGood?'Está tudo certo do lado da app. Se já a instalaste, procura o ícone "Escola" no ecrã principal. Se não, fecha esta página, volta a abri-la e espera uns 10 segundos. Não funciona em modo anónimo.'
+                 :'Corrige primeiro os pontos a vermelho acima.');
+      }
+    }
+    var bad=results.filter(function(s){return s==='bad'}).length;
+    document.getElementById('sum').textContent=bad?('Há '+bad+' problema(s) a resolver.'):'Tudo pronto para instalar.';
+    var a=document.createElement('a');a.className='btn';a.href='./';a.textContent='Abrir a app';
+    document.getElementById('actions').append(a);
+  }
+  run();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,79 @@
+CALENDÁRIO ESCOLAR - APP INSTALÁVEL (PWA) + SUPABASE
+=====================================================
+
+O QUE É
+Esta pasta é a app inteira. Não usa nenhuma "framework": é HTML e JavaScript simples.
+O ficheiro build.mjs junta tudo na pasta "dist" (é a "dist" que vai para a internet) e verifica sozinho
+se a app cumpre o que o Chrome exige para mostrar "Instalar aplicação".
+
+FICHEIROS
+  index.html                a app (todas as funcionalidades)
+  manifest.webmanifest      o "cartão de identidade": nome, ícones, janela própria (standalone)
+  sw.js                     o "service worker": guarda a app no telemóvel para abrir sem internet e atualiza sozinha
+  version.js                número da versão (aparece em Definições > "Versão da app")
+  supabase-config.js        onde ficam o URL e a chave do Supabase (vazio; o build preenche a partir das variáveis)
+  diagnostico.html          página que te diz, em português, se o Chrome vai mostrar "Instalar aplicação"
+  _headers                  regras do Netlify (a app e o service worker nunca ficam "presos" em cache velha)
+  icon-*.png, apple-touch-icon.png   ícones (192, 512 e redondos "maskable")
+  build.mjs, package.json, netlify.toml, .env.example, .gitignore   ferramentas de publicação
+  supabase-setup.sql        a tabela do Supabase (já corrida uma vez, não precisas de a repetir)
+
+
+PUBLICAR A APP (a partir do telemóvel)
+--------------------------------------
+Faz isto UMA vez.
+1. No telemóvel, abre a app "Ficheiros" (Google), toca no ZIP e escolhe "Extrair".
+2. Abre github.com no Chrome (menu ⋮ > "Site para computador" ajuda). Cria conta grátis.
+3. "New repository": nome  calendario-escolar  > Create repository.
+4. Na página do repositório vazio toca em "uploading an existing file". Toca na área para escolher ficheiros,
+   abre a pasta extraída, seleciona TODOS os ficheiros (toca e mantém num ficheiro, depois "selecionar tudo")
+   e envia. Espera acabar e toca em "Commit changes".
+5. Abre app.netlify.com, cria conta (podes entrar com o GitHub) e escolhe "Add new project" >
+   "Import an existing project" > GitHub > o repositório calendario-escolar.
+6. Antes de carregar em Deploy, abre "Environment variables" e junta duas:
+       SUPABASE_URL        = o Project URL do Supabase (https://xxxxxxxx.supabase.co)
+       SUPABASE_ANON_KEY   = a chave "anon" ou "publishable" do Supabase
+   (NUNCA a chave service_role / secret. O build recusa-a.)
+7. Deploy. Passado um minuto o Netlify dá-te um endereço https://qualquer-nome.netlify.app. Esse é o teu site.
+8. No Supabase: Authentication > URL Configuration > "Site URL" = esse endereço.
+
+Alternativa (num computador, sem GitHub): cria um ficheiro .env com as duas linhas do .env.example, corre
+    node build.mjs
+e arrasta a pasta "dist" para app.netlify.com/drop.
+
+
+INSTALAR NO ANDROID (Chrome)
+----------------------------
+1. Abre o endereço do teu site (https://...netlify.app) no Google Chrome, COM internet.
+   Não abras por dentro do WhatsApp/Instagram e não uses o modo anónimo.
+2. Espera uns 10 segundos e toca nos 3 pontos (⋮) do Chrome.
+3. Deve aparecer "Instalar aplicação" (e não só "Adicionar ao ecrã principal"). Toca nela > Instalar.
+4. Aparece o ícone "Escola" no ecrã principal e na lista de apps. Abre: a app abre numa janela própria,
+   sem barra de endereço.
+5. Repete no tablet.
+Se só aparecer "Adicionar ao ecrã principal": abre  https://SEU-SITE.netlify.app/diagnostico.html
+Essa página diz o que falta (a vermelho) ou mostra o botão "Instalar agora".
+(A instalação precisa de internet nesse momento. Depois a app funciona sem internet.)
+
+ATALHOS: com o dedo no ícone da app aparecem atalhos para Horário, TPC, Notas e Calendário do mês.
+
+
+ATUALIZAR A APP NO FUTURO
+-------------------------
+1. No GitHub, abre o repositório > Add file > Upload files > envia o ficheiro novo (ou alterado) com o mesmo nome
+   e toca em "Commit changes". (Para mudar uma linha: toca no ficheiro > ícone do lápis.)
+2. O Netlify publica sozinho em cerca de 1 minuto. Cada publicação gera uma versão nova.
+3. Nos telemóveis/tablet: da próxima vez que abrires a app com internet, ela atualiza sozinha (pode
+   recarregar uma vez). Não precisas de reinstalar. Em Definições vês "Versão da app".
+Os teus dados NÃO são apagados:
+  - ficam guardados no aparelho e no Supabase;
+  - o service worker só substitui os ficheiros da app, nunca os teus dados;
+  - as alterações feitas sem internet ficam "por enviar" e seguem quando houver internet.
+Importante: não mudes o endereço do site. Se o endereço mudar, é uma app nova (os dados por enviar não passam).
+Se desinstalares a app ou limpares os dados do Chrome, apagas o que ainda não foi enviado para o Supabase.
+
+
+HTTPS
+-----
+O Netlify dá HTTPS automaticamente (o endereço começa por https://). O Chrome só deixa instalar assim.
+Se o teu endereço não começar por https://, não uses esse endereço.
