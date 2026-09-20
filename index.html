@@ -355,6 +355,13 @@ main{flex:1;min-height:0;display:flex;flex-direction:column}
 }
 </style>
 </head>
+  <script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('./sw.js');
+  });
+}
+  </script>
 <body>
 <div id="app">
   <header class="top">
